@@ -103,6 +103,7 @@ class GMMLayer(GMMMixin, base.BaseEncodingLayer):
 
     def _log_proba_intern(self, x, use_sk_learn=False):
 
+        *_, x = self._check_input(x)
         if not use_sk_learn:
             return super()._log_proba_intern(x)
 

@@ -43,7 +43,8 @@ class BaseFVELayerTest(base.BaseFVEncodingTest):
             var.T.copy(),
             w.copy(),
         )
-        ref = [fisher(_x, *params,
+        *_, size = x.shape
+        ref = [fisher(_x.reshape(-1, size), *params,
                     normalized=False,
                     square_root=False,
                     improved=False,
@@ -69,8 +70,9 @@ class BaseFVELayerTest(base.BaseFVEncodingTest):
         log_proba = utils.asarray(log_proba)
 
         for i, _x in enumerate(self.X):
+            *_, size = _x.shape
             cy_mean, cy_var, cy_w, LL, cy_gamma = cygmm.cy_gmm(
-                utils.asarray(_x),
+                utils.asarray(_x).reshape(-1, size),
                 self.n_components,
                 0, # max_iterations
                 "custom".encode("utf8"), # init_mode
@@ -94,8 +96,9 @@ class BaseFVELayerTest(base.BaseFVEncodingTest):
         self.n_components = 1
         layer = self._new_layer(init_mu=0, init_sig=1, train=False)
         _x = utils.asarray(self.X)
-        gap_output = self.xp.mean(_x, axis=1)
-        ref_sig_output = self.xp.mean(_x**2 - 1, axis=1) / self.xp.sqrt(2)
+        axis = 1 if _x.ndim == 3 else (1,2)
+        gap_output = self.xp.mean(_x, axis=axis)
+        ref_sig_output = self.xp.mean(_x**2 - 1, axis=axis) / self.xp.sqrt(2)
 
         output = layer(self.X)
 
@@ -128,11 +131,6 @@ class FVELayer_noEMTest(BaseFVELayerTest):
 
 
         output = layer(self.X)
-
-        # from chainer.computational_graph import build_computational_graph as bcg
-        # import graphviz
-        # g = bcg([output])
-        # graphviz.Source(g.dump()).render(view=True)
 
         output.sum().backward()
 

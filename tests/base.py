@@ -19,7 +19,7 @@ class BaseFVEncodingTest(abc.ABC, unittest.TestCase):
             f"{msg}:\n{arr0}\n!=\n{arr1}")
 
     def setUp(self):
-        self.n, self.t, self.in_size = 8, 4, 128
+        self.n, H, W, self.in_size = 8, 3, 3, 128
         self.n_components = 2
         self.alpha = 0.9
 
@@ -27,7 +27,8 @@ class BaseFVEncodingTest(abc.ABC, unittest.TestCase):
 
         self.rnd = self.xp.random.RandomState(self.seed)
 
-        X = self.rnd.randn(self.n, self.t, self.in_size).astype(self.dtype)
+        X = self.rnd.randn(self.n, H, W, self.in_size).astype(self.dtype)
+        self.t = H * W
         self.X = th.as_tensor(X)
 
         self.init_mu = self.rnd.randn(self.in_size, self.n_components).astype(self.dtype)

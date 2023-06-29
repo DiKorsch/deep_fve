@@ -37,8 +37,16 @@ class GMMLayerTest(base.BaseFVEncodingTest):
 
         layer = self._new_layer()
         vis_mask = th.ones(self.X.shape[:-1], dtype=bool)
-        idxs = th.randint(self.t, size=(self.n,))
-        vis_mask[np.arange(self.n), idxs] = 0
+        _, *size, _ = self.X.shape
+        idxs = np.random.randint(np.multiply.reduce(size), size=(self.n,))
+        idxs = np.unravel_index(idxs, size)
+
+        if len(size) == 2:
+            vis_mask[np.arange(self.n), idxs[0], idxs[1]] = 0
+
+        elif len(size) == 1:
+            vis_mask[np.arange(self.n), idxs] = 0
+
         layer(self.X, use_mask=True, visibility_mask=vis_mask)
 
         with self.assertRaises(RuntimeError):

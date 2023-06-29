@@ -4,7 +4,6 @@ import torch as th
 import torch.nn as nn
 import typing as T
 
-from deep_fve import utils
 
 class WeightedResult(T.NamedTuple):
     result: th.Tensor
@@ -62,23 +61,30 @@ class BaseEncodingLayer(nn.Module, abc.ABC):
 
 
     def _check_input(self, x: th.Tensor):
-        assert x.ndim == 3, \
-            "input should have following dimensions: (batch_size, n_features, feature_size)"
+        assert x.ndim in (3, 4), \
+            "input should have following structure:\n" \
+            "either (batch_size, n_features, feature_size) \n" \
+            "or (batch_size, H, W, feature_size)"
+
+        if x.ndim == 4:
+            n, h, w, in_size = x.shape
+            x = x.reshape(n, h * w, in_size)
+
         n, t, in_size = x.shape
         assert in_size == self.in_size, \
             "feature size of the input does not match input size: ({} != {})! ".format(
                 in_size, self.in_size)
-        return n, t
+        return n, t, x
 
 
     def _expand_params(self, x: th.Tensor):
-        n, t = self._check_input(x)
-        shape = (n, t, self.in_size, self.n_components)
-        shape2 = (n, t, self.n_components)
+        n, t, x = self._check_input(x)
+        param_shape = (n, t, self.in_size, self.n_components)
+        weight_shape = (n, t, self.n_components)
 
-        _x = th.broadcast_to(th.unsqueeze(x, -1), shape)
+        _x = th.broadcast_to(th.unsqueeze(x, -1), param_shape)
 
-        _params = [(self.mu, shape), (self.sig, shape), (self.w, shape2)]
+        _params = [(self.mu, param_shape), (self.sig, param_shape), (self.w, weight_shape)]
         _ps = []
         for p, s in _params:
             _p = th.unsqueeze(th.unsqueeze(p, 0), 0)
@@ -142,21 +148,22 @@ class BaseEncodingLayer(nn.Module, abc.ABC):
     def get_mask(self, x, use_mask, visibility_mask=None):
         if not use_mask:
             return Ellipsis
-        _feats = x.detach()#utils.asarray(x)
-        _feat_lens = th.sum(_feats**2, axis=2).sqrt()
+        _feats = x.detach()
+        _feat_lens = th.sum(_feats**2, axis=-1).sqrt()
 
+        axis = 1 if x.ndim == 3 else (1,2)
 
         if visibility_mask is None:
-            _mean_feat_lens = _feat_lens.mean(axis=1, keepdims=True)
+            _mean_feat_lens = _feat_lens.mean(axis=axis, keepdims=True)
             selected = _feat_lens >= _mean_feat_lens
 
         else:
 
-            if 0 in visibility_mask.sum(axis=1):
+            if 0 in visibility_mask.sum(axis=axis):
                 raise RuntimeError("Selection mask contains not selected samples!")
 
-            _mean_feat_lens = (_feat_lens * visibility_mask).sum(axis=1, keepdims=True)
-            _n_visible_feats = visibility_mask.sum(axis=1, keepdims=True)#.astype(chainer.config.dtype)
+            _mean_feat_lens = (_feat_lens * visibility_mask).sum(axis=axis, keepdims=True)
+            _n_visible_feats = visibility_mask.sum(axis=axis, keepdims=True)
             _mean_feat_lens /= _n_visible_feats
 
             selected = _feat_lens >= _mean_feat_lens
