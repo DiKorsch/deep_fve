@@ -4,12 +4,13 @@ import cupy as cp
 
 from sklearn.utils import check_random_state
 
+from deep_fve import utils
 
 _LOG_2PI = np.log(2 * np.pi)
 
-def logsumexp(x, *, axis: int,  xp=cp):
+def logsumexp(x, *, axis: int,  xp=cp, eps=1e-12):
     x_max = x.max()
-    return xp.log(xp.sum(xp.exp(x - x_max), axis)) + x_max
+    return xp.log(xp.sum(xp.exp(x - x_max), axis) + eps) + x_max
 
 def _kernel_e_step(X, means, cov, ws, xp=cp):
 
@@ -88,15 +89,13 @@ def _basic_e_step(X, means, cov, ws, xp=np):
 class GPUMixin(abc.ABC):
 
     def xp_from_array(self, X):
-        _x = getattr(X, "array", X)
-
-        return cp.get_array_module(_x)
+        return cp.get_array_module(utils.asarray(X))
 
 
     def _transform_X(self, X):
         X = X.reshape(-1, X.shape[-1])
-        xp = self.xp_from_array(X)
-        _x = getattr(X, "array", X)
+        _x = utils.asarray(X)
+        xp = cp.get_array_module(_x)
         return _x, xp
 
     def _initialize_parameters(self, X, random_state):

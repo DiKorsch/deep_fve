@@ -13,6 +13,10 @@ class WeightedResult(T.NamedTuple):
 class BaseEncodingLayer(nn.Module, abc.ABC):
     _LOG_2PI = np.log(2 * np.pi)
 
+
+    def extra_repr(self) -> str:
+        return f"in_size={self.in_size}, n_components={self.n_components}"
+
     def __init__(self, in_size, n_components, *,
         init_mu=None,
         init_sig=1,

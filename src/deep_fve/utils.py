@@ -7,7 +7,7 @@ def asarray(var):
             return var.detach().numpy()
 
         with cp.cuda.Device(var.device.index):
-            return cp.asarray(var)
+            return cp.asarray(var.detach())
 
     return var
 
@@ -19,3 +19,14 @@ def ema(old, new, *, alpha: float, t: int):
     res = alpha * uncorrected_old + (1 - alpha) * new
 
     return res / correction
+
+
+if __name__ == '__main__':
+
+    th_a = th.Tensor((1,2,3)) +1
+    np_a = asarray(th_a)
+    cp_a0 = asarray(th_a.to("cuda:0"))
+    cp_a1 = asarray(th_a.to("cuda:1"))
+
+    for a in [th_a, np_a, cp_a0, cp_a1]:
+        print(a, getattr(a, "device", None), type(a))

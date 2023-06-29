@@ -1,12 +1,61 @@
+import cupy as cp
 import numpy as np
+import time
 import torch as th
+import unittest
 
+from functools import partial
 from scipy.stats import multivariate_normal as mvn
 
 from deep_fve import GMMLayer
 from deep_fve import utils
+from deep_fve.mixtures.base import _basic_e_step
+from deep_fve.mixtures.base import _kernel_e_step
 
 from tests import base
+
+class GMMMixtureTest(unittest.TestCase):
+
+    def setUp(self):
+        T, N_COMP, SIZE = 64, 10, 256
+        dtype, xp = cp.float32, cp
+
+        self.atol = 1e-3
+        self.rtol = 1e-2
+
+        self.X = xp.random.randn(T, SIZE).astype(dtype)
+        self.mu = xp.random.rand(N_COMP, SIZE).astype(dtype)
+        self.sig = xp.random.rand(N_COMP, SIZE).astype(dtype) + 1
+        self.ws = xp.ones(N_COMP).astype(dtype) / N_COMP
+        self.xp = xp
+
+    def assertClose(self, arr0, arr1, msg):
+        self.assertTrue(np.allclose(utils.asarray(arr0), utils.asarray(arr1), rtol=self.rtol, atol=self.atol),
+            f"{msg}:\nMSE: {np.mean((arr0-arr1)**2)}")
+
+    def test_e_step(self):
+        logL0, log_gammas0 = self.bench(_kernel_e_step, 10000, 200)
+        logL1, log_gammas1 = self.bench(_basic_e_step, 10000, 200)
+
+        self.assertClose(log_gammas0, log_gammas1, msg="Were not equal")
+        self.assertClose(logL0, logL1, msg="Were not equal")
+
+    def bench(self, func, n_iter: int, warm_up: int):
+
+        for _ in range(warm_up):
+            res = func(self.X, self.mu, self.sig, self.ws, xp=self.xp)
+
+        t0 = time.time()
+
+        for _ in range(n_iter):
+            res = func(self.X, self.mu, self.sig, self.ws, xp=self.xp)
+
+        t0 = time.time() - t0
+        func_name = func.func.__name__ if isinstance(func, partial) else func.__name__
+        print(f"{func_name} took {t0:.3f}s for {n_iter:,d} runs")
+        return res
+
+
 
 class GMMLayerTest(base.BaseFVEncodingTest):
 
