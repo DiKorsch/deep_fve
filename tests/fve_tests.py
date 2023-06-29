@@ -1,6 +1,5 @@
 import abc
 import numpy as np
-import torch as th
 
 from cyvlfeat.fisher import fisher
 from cyvlfeat.gmm import cygmm
