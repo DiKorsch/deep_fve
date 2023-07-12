@@ -15,4 +15,4 @@ class GMM(GPUMixin, GaussianMixture):
         self.weights_, self.means_, self.covariances_ = \
             self._gaussian_params(X, log_resp, xp=xp)
 
-        self.weights_ /= X.shape[0]
+        self.weights_ /= self.weights_.sum() #X.shape[0]

@@ -118,7 +118,7 @@ class GPUMixin(abc.ABC):
             self._initialize_parameters(X, random_state)
 
         for n_iter in range(1, self.max_iter + 1):
-            log_prob_norm, log_resp = self._e_step(X, xp=xp)
+            log_prob_norm, log_resp = self._e_step(X, xp=xp, use_kernel=False)
             self._m_step(X, log_resp, xp=xp)
 
     def _e_step(self, X, xp=np, use_kernel=True):
