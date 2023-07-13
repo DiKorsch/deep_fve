@@ -12,7 +12,9 @@ class GMM(GPUMixin, GaussianMixture):
             Copied from sklearn/mixture/gaussian_mixture.py
         """
 
-        self.weights_, self.means_, self.covariances_ = \
+        nk, self.means_, self.covariances_ = \
             self._gaussian_params(X, log_resp, xp=xp)
 
-        self.weights_ /= self.weights_.sum() #X.shape[0]
+
+        self.weights_ = nk / nk.sum() #X.shape[0]
+        self.precisions_cholesky_ = 1 / xp.sqrt(self.covariances_)

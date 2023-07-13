@@ -6,18 +6,21 @@ import unittest
 
 from functools import partial
 from scipy.stats import multivariate_normal as mvn
+from sklearn.mixture import GaussianMixture as GMM
 
 from deep_fve import GMMLayer
 from deep_fve import utils
+from deep_fve.mixtures import GMM as gpuGMM
 from deep_fve.mixtures.base import _basic_e_step
 from deep_fve.mixtures.base import _kernel_e_step
+from deep_fve.modules.gmm import SKLearnArgs
 
 from tests import base
 
 class GMMMixtureTest(unittest.TestCase):
 
     def setUp(self):
-        T, N_COMP, SIZE = 64, 10, 256
+        T, N_COMP, SIZE = 32, 4, 256
         dtype, xp = cp.float32, cp
 
         self.atol = 1e-3
@@ -55,7 +58,70 @@ class GMMMixtureTest(unittest.TestCase):
         print(f"{func_name} took {t0:.3f}s for {n_iter:,d} runs")
         return res
 
+    def check_params(self, gmm0, gmm1, prefix=""):
 
+        params0 = gmm0._get_parameters()
+        params1 = gmm1._get_parameters()
+        names = ["w", "mu", "sig", "prec"]
+
+        for name, p0, p1 in zip(names, params0, params1):
+            self.assertClose(p0, p1,
+                f"{prefix}Parameters {name} did not match: {p0} != {p1}")
+
+    def test_fit(self):
+        n_components = self.mu.shape[0]
+        seed = np.random.randint(2**32 - 1)
+
+        kwargs = SKLearnArgs(max_iter=10, tol=1e-3).asdict()
+        kwargs["warm_start"] = True
+        x = self.X.get()
+
+        rnd = np.random.RandomState(seed)
+        gmm = GMM(n_components, covariance_type="diag", random_state=rnd, **kwargs)
+        gmm._initialize_parameters(x, random_state=rnd)
+
+        # we need this for warm start!
+        gmm.converged_, gmm.lower_bound_ = False, -np.inf
+
+
+        rnd = np.random.RandomState(seed)
+        gpu_gmm = gpuGMM(n_components, covariance_type="diag", random_state=rnd, **kwargs)
+        gpu_gmm._initialize_parameters(x, random_state=rnd)
+
+        self.check_params(gmm, gpu_gmm, prefix="[Init] ")
+
+        gmm.fit(x)
+        gpu_gmm.fit(x)
+
+        self.check_params(gmm, gpu_gmm, prefix="[Fit] ")
+
+
+
+
+    def test_steps(self):
+        n_components = self.mu.shape[0]
+        kwargs = SKLearnArgs(max_iter=100, tol=1e-3).asdict()
+        x = self.X.get()
+
+        gmm = GMM(n_components, covariance_type="diag", **kwargs)
+        gmm.fit(x)
+
+        gpu_gmm = gpuGMM(n_components, covariance_type="diag", **kwargs)
+        gpu_gmm._set_parameters(gmm._get_parameters())
+
+        self.check_params(gmm, gpu_gmm)
+
+        result0 = gmm._e_step(x)
+        result1 = gpu_gmm._e_step(x, use_kernel=False)
+
+        for i, (res0, res1) in enumerate(zip(result0, result1)):
+            self.assertClose(res0, res1, f"E-Step Result #{i} was incorrect: {res0} != {res1}")
+
+        log_prob_norm, log_resp = result0
+
+        gmm._m_step(x, log_resp)
+        gpu_gmm._m_step(x, log_resp)
+        self.check_params(gmm, gpu_gmm, prefix="[M-step] ")
 
 class GMMLayerTest(base.BaseFVEncodingTest):
 
@@ -136,6 +202,7 @@ class GMMLayerTest(base.BaseFVEncodingTest):
 
     def test_update(self):
         layer = self._new_layer()
+        names = ["mu", "sig", "w"]
         params = (layer.mu, layer.sig, layer.w)
 
         params0 = [np.copy(p) for p in params]
@@ -143,9 +210,9 @@ class GMMLayerTest(base.BaseFVEncodingTest):
         layer(self.X)
         params1 = [np.copy(p) for p in params]
 
-        for p0, p1 in zip(params0, params1):
+        for name, p0, p1 in zip(names, params0, params1):
             self.assertTrue(np.all(p0 == p1),
-                "Params should not be updated when not training!")
+                f"Param {name} should not be updated when not training!")
 
 
         params0 = [np.copy(p) for p in params]
@@ -155,9 +222,9 @@ class GMMLayerTest(base.BaseFVEncodingTest):
 
         params1 = [np.copy(p) for p in params]
 
-        for p0, p1 in zip(params0, params1):
+        for name, p0, p1 in zip(names, params0, params1):
             self.assertTrue(np.all(p0 != p1),
-                "Params should be updated when training!")
+                f"Param {name} should be updated when training!")
 
     def test_assignment_shape(self):
         layer = self._new_layer()

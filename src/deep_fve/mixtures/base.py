@@ -3,14 +3,21 @@ import numpy as np
 import cupy as cp
 
 from sklearn.utils import check_random_state
+from scipy.special import logsumexp as _logsumexp
 
 from deep_fve import utils
 
 _LOG_2PI = np.log(2 * np.pi)
 
-def logsumexp(x, *, axis: int,  xp=cp, eps=1e-12):
+def logsumexp(x, *, axis: int,  xp=cp):
+    if xp == cp:
+        return xp.array(_logsumexp(x.get(), axis=axis))
+    else:
+        return _logsumexp(x, axis=axis)
+    ### OLD IMPLEMENTATION THAT GIVES DIFFERENT RESULTS
     x_max = x.max()
-    return xp.log(xp.sum(xp.exp(x - x_max), axis) + eps) + x_max
+    eps = 0 #xp.finfo(x.dtype).eps
+    return xp.log(xp.maximum(xp.sum(xp.exp(x - x_max), axis), eps)) + x_max
 
 def _kernel_e_step(X, means, cov, ws, xp=cp):
 
@@ -117,9 +124,23 @@ class GPUMixin(abc.ABC):
         if not all([hasattr(self, attr) for attr in attrs]):
             self._initialize_parameters(X, random_state)
 
-        for n_iter in range(1, self.max_iter + 1):
+        self.converged_ = False
+        lower_bound = -np.inf #if do_init else self.lower_bound_
+
+        for self.n_iter_ in range(1, self.max_iter + 1):
+            prev_lower_bound = lower_bound
+
             log_prob_norm, log_resp = self._e_step(X, xp=xp, use_kernel=False)
+
             self._m_step(X, log_resp, xp=xp)
+
+            lower_bound = self._compute_lower_bound(log_resp, log_prob_norm)
+            change = lower_bound - prev_lower_bound
+
+            if abs(change) < self.tol:
+                self.converged_ = True
+                break
+
 
     def _e_step(self, X, xp=np, use_kernel=True):
         """ E step.
@@ -145,9 +166,7 @@ class GPUMixin(abc.ABC):
         avg_X2 = xp.dot(resp.T, X ** 2) / nk[:, None]
         avg_means2 = means ** 2
         avg_X_means = means * xp.dot(resp.T, X) / nk[:, None]
-        covariances = avg_X2 - 2 * avg_X_means + avg_means2
-
-        covariances = xp.maximum(covariances, self.reg_covar)
+        covariances = avg_X2 - 2 * avg_X_means + avg_means2 + self.reg_covar
 
         return nk, means, covariances
 

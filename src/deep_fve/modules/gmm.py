@@ -10,9 +10,13 @@ from deep_fve.modules import base
 
 @dataclass
 class SKLearnArgs:
-    max_iter: int = 1
+    max_iter: int = 100
     tol: float = np.inf
     reg_covar: float = 1e-2
+    init_params: str = "random_from_data"
+
+    def asdict(self) -> dict:
+        return asdict(self)
 
 class GMMMixin(abc.ABC):
 
@@ -42,7 +46,7 @@ class GMMMixin(abc.ABC):
         return gmm
 
     def sample(self, n_samples):
-        gmm = self.as_sklearn_gmm(**asdict(self.sk_learn_kwargs))
+        gmm = self.as_sklearn_gmm(**self.sk_learn_kwargs.asdict())
         return gmm.sample(n_samples)
 
     def precisions_chol(self) -> th.Tensor:
@@ -118,8 +122,8 @@ class GMMLayer(GMMMixin, base.BaseEncodingLayer):
 
     def get_new_params(self, x):
         if self.sk_gmm is None:
-            # self.sk_gmm = self.as_sklearn_gmm(**self.sk_learn_kwargs)
-            self.sk_gmm = self.new_gmm(**asdict(self.sk_learn_kwargs))
+            # self.sk_gmm = self.as_sklearn_gmm(**self.sk_learn_kwargs.asdict())
+            self.sk_gmm = self.new_gmm(**self.sk_learn_kwargs.asdict())
 
         self.sk_gmm.fit(x)
 
