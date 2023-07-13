@@ -20,7 +20,7 @@ from tests import base
 class GMMMixtureTest(unittest.TestCase):
 
     def setUp(self):
-        T, N_COMP, SIZE = 32, 4, 256
+        T, N_COMP, SIZE = 32, 10, 256
         dtype, xp = cp.float32, cp
 
         self.atol = 1e-3

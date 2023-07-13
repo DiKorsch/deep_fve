@@ -3,21 +3,16 @@ import numpy as np
 import cupy as cp
 
 from sklearn.utils import check_random_state
-from scipy.special import logsumexp as _logsumexp
+
 
 from deep_fve import utils
 
 _LOG_2PI = np.log(2 * np.pi)
 
 def logsumexp(x, *, axis: int,  xp=cp):
-    if xp == cp:
-        return xp.array(_logsumexp(x.get(), axis=axis))
-    else:
-        return _logsumexp(x, axis=axis)
-    ### OLD IMPLEMENTATION THAT GIVES DIFFERENT RESULTS
-    x_max = x.max()
-    eps = 0 #xp.finfo(x.dtype).eps
-    return xp.log(xp.maximum(xp.sum(xp.exp(x - x_max), axis), eps)) + x_max
+    # computing max over the axis is very crucial!
+    x_max = x.max(axis=axis, keepdims=True)
+    return xp.log(xp.sum(xp.exp(x - x_max), axis)) + xp.squeeze(x_max, axis=axis)
 
 def _kernel_e_step(X, means, cov, ws, xp=cp):
 
