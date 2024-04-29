@@ -13,7 +13,7 @@ class SKLearnArgs:
     max_iter: int = 100
     tol: float = np.inf
     reg_covar: float = 1e-2
-    init_params: str = "random_from_data"
+    init_params: str = "kmeans"
 
     def asdict(self) -> dict:
         return asdict(self)
