@@ -7,7 +7,7 @@ def asarray(var):
             return var.detach().numpy()
 
         with cp.cuda.Device(var.device.index):
-            return cp.asarray(var.detach())
+            return cp.asarray(var.detach().cpu().float())
 
     return var
 
